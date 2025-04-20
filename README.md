@@ -28,7 +28,7 @@ Esta es una aplicación web/móvil diseñada para brindar a los usuarios informa
 - **Frontend web:** Next.js  
 - **Backend & base de datos:** Firebase (Cloud Functions + Firestore)  
 - **Prototipado:** Figma  
-- **Hosting:** Firebase Hosting
+- **Hosting:** Firebase Hosting/Vercel
 
 ---
 
@@ -44,7 +44,7 @@ Esta es una aplicación web/móvil diseñada para brindar a los usuarios informa
 
 ## 📌 Estado del proyecto
 
-Actualmente en fase de desarrollo y validación con usuarios reales mediante prototipos y pruebas de usabilidad.
+Actualmente en fase de inicial.
 
 ---
 
