@@ -114,7 +114,7 @@ export default function Home() {
           </h2>
 
           <div className="flex flex-wrap justify-center gap-6">
-            {["Flutter", "Next.js", "Firebase", "Figma", "Vercel"].map((tech, index) => (
+            {["React Native", "Next.js", "Firebase", "Figma", "Vercel"].map((tech, index) => (
               <div
                 key={index}
                 className="bg-white dark:bg-slate-800 px-6 py-3 rounded-full shadow-md hover:shadow-lg transition-all transform hover:-translate-y-1 text-slate-800 dark:text-white font-medium border border-slate-200 dark:border-slate-700"

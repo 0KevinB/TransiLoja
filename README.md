@@ -24,7 +24,7 @@ Esta es una aplicación web/móvil diseñada para brindar a los usuarios informa
 
 ## 🛠️ Tecnologías utilizadas
 
-- **Frontend móvil:** Flutter  
+- **Frontend móvil:** React Native  
 - **Frontend web:** Next.js  
 - **Backend & base de datos:** Firebase (Cloud Functions + Firestore)  
 - **Prototipado:** Figma  
