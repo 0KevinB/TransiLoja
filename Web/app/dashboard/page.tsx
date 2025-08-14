@@ -6,15 +6,18 @@ import { db } from "@/lib/firebase"
 import { StatsCard } from "@/components/dashboard/stats-card"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { MapPin, Route, Users, AlertTriangle, TrendingUp, Clock, Radio } from "lucide-react"
+import { InteractiveMap } from "@/components/map/interactive-map"
+import { MapPin, Route, Users, AlertTriangle, TrendingUp, Clock, Radio, Bus, Calendar } from "lucide-react"
 
 interface DashboardStats {
   totalStops: number
   totalRoutes: number
   totalUsers: number
+  totalBuses: number
   activeAlerts: number
   liveBuses: number
   totalTrips: number
+  totalCalendars: number
 }
 
 interface RecentAlert {
@@ -24,63 +27,135 @@ interface RecentAlert {
   createdAt: Date
 }
 
+interface RecentTrip {
+  id: string
+  routeName: string
+  busPlate: string
+  startTime: string
+  createdAt: Date
+}
+
 export default function Dashboard() {
   const [stats, setStats] = useState<DashboardStats>({
     totalStops: 0,
     totalRoutes: 0,
     totalUsers: 0,
+    totalBuses: 0,
     activeAlerts: 0,
     liveBuses: 0,
     totalTrips: 0,
+    totalCalendars: 0,
   })
   const [recentAlerts, setRecentAlerts] = useState<RecentAlert[]>([])
+  const [recentTrips, setRecentTrips] = useState<RecentTrip[]>([])
+  const [stops, setStops] = useState<any[]>([])
+  const [routes, setRoutes] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const fetchDashboardData = async () => {
-      try {
-        // Fetch stats
-        const [stopsSnap, routesSnap, usersSnap, alertsSnap, busesSnap, tripsSnap] = await Promise.all([
+    fetchDashboardData()
+  }, [])
+
+  const fetchDashboardData = async () => {
+    try {
+      // Fetch stats
+      const [stopsSnap, routesSnap, usersSnap, busesSnap, alertsSnap, liveBusesSnap, tripsSnap, calendarsSnap] =
+        await Promise.all([
           getDocs(collection(db, "stops")),
           getDocs(collection(db, "routes")),
           getDocs(collection(db, "users")),
+          getDocs(collection(db, "buses")),
           getDocs(query(collection(db, "alerts"), where("isActive", "==", true))),
           getDocs(collection(db, "liveBuses")),
           getDocs(collection(db, "trips")),
+          getDocs(collection(db, "calendars")),
         ])
 
-        setStats({
-          totalStops: stopsSnap.size,
-          totalRoutes: routesSnap.size,
-          totalUsers: usersSnap.size,
-          activeAlerts: alertsSnap.size,
-          liveBuses: busesSnap.size,
-          totalTrips: tripsSnap.size,
-        })
+      setStats({
+        totalStops: stopsSnap.size,
+        totalRoutes: routesSnap.size,
+        totalUsers: usersSnap.size,
+        totalBuses: busesSnap.size,
+        activeAlerts: alertsSnap.size,
+        liveBuses: liveBusesSnap.size,
+        totalTrips: tripsSnap.size,
+        totalCalendars: calendarsSnap.size,
+      })
 
-        // Fetch recent alerts
-        const recentAlertsSnap = await getDocs(query(collection(db, "alerts"), orderBy("createdAt", "desc"), limit(5)))
-
-        const alerts: RecentAlert[] = []
-        recentAlertsSnap.forEach((doc) => {
-          const data = doc.data()
-          alerts.push({
-            id: doc.id,
-            title: data.title,
-            type: data.type,
-            createdAt: data.createdAt?.toDate() || new Date(),
-          })
+      // Fetch stops and routes for map
+      const stopsData: any[] = []
+      stopsSnap.forEach((doc) => {
+        const data = doc.data()
+        stopsData.push({
+          id: doc.id,
+          name: data.name,
+          lat: data.lat,
+          lng: data.lng,
+          lines: data.lines || [],
         })
-        setRecentAlerts(alerts)
-      } catch (error) {
-        console.error("Error fetching dashboard data:", error)
-      } finally {
-        setLoading(false)
+      })
+
+      const routesData: any[] = []
+      routesSnap.forEach((doc) => {
+        const data = doc.data()
+        routesData.push({
+          id: doc.id,
+          name: data.name,
+          shortName: data.shortName,
+          color: data.color,
+          textColor: data.textColor,
+          stopIds: data.stopIds || [],
+        })
+      })
+
+      setStops(stopsData)
+      setRoutes(routesData)
+
+      // Fetch recent alerts
+      const recentAlertsSnap = await getDocs(query(collection(db, "alerts"), orderBy("createdAt", "desc"), limit(5)))
+
+      const alerts: RecentAlert[] = []
+      recentAlertsSnap.forEach((doc) => {
+        const data = doc.data()
+        alerts.push({
+          id: doc.id,
+          title: data.title,
+          type: data.type,
+          createdAt: data.createdAt?.toDate() || new Date(),
+        })
+      })
+      setRecentAlerts(alerts)
+
+      // Fetch recent trips
+      const recentTripsSnap = await getDocs(query(collection(db, "trips"), orderBy("createdAt", "desc"), limit(5)))
+
+      const trips: RecentTrip[] = []
+      for (const tripDoc of recentTripsSnap.docs) {
+        const tripData = tripDoc.data()
+
+        // Get route info
+        const routeDoc = await getDocs(query(collection(db, "routes"), where("__name__", "==", tripData.routeId)))
+        const routeName = routeDoc.docs[0]?.data()?.shortName || "Ruta desconocida"
+
+        // Get bus info
+        const busDoc = await getDocs(query(collection(db, "buses"), where("__name__", "==", tripData.busId)))
+        const busPlate = busDoc.docs[0]?.data()?.plateNumber || "Bus desconocido"
+
+        trips.push({
+          id: tripDoc.id,
+          routeName,
+          busPlate,
+          startTime: tripData.startTime,
+          createdAt: tripData.createdAt?.toDate() || new Date(),
+        })
       }
+      setRecentTrips(trips)
+    } catch (error) {
+      console.error("Error fetching dashboard data:", error)
+    } finally {
+      setLoading(false)
     }
-
-    fetchDashboardData()
-  }, [])
+  }
 
   const getAlertBadgeVariant = (type: string) => {
     switch (type) {
@@ -99,7 +174,7 @@ export default function Dashboard() {
     return (
       <div className="space-y-6">
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          {[...Array(6)].map((_, i) => (
+          {[...Array(8)].map((_, i) => (
             <div key={i} className="h-32 bg-gray-200 animate-pulse rounded-lg" />
           ))}
         </div>
@@ -116,7 +191,7 @@ export default function Dashboard() {
       </div>
 
       {/* Stats Grid */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8">
         <StatsCard
           title="Paradas"
           value={stats.totalStops}
@@ -131,6 +206,14 @@ export default function Dashboard() {
           description="Líneas de transporte activas"
           icon={Route}
           trend={{ value: 2.1, isPositive: true }}
+        />
+
+        <StatsCard
+          title="Buses"
+          value={stats.totalBuses}
+          description="Vehículos en la flota"
+          icon={Bus}
+          trend={{ value: 1.5, isPositive: true }}
         />
 
         <StatsCard
@@ -150,6 +233,14 @@ export default function Dashboard() {
         />
 
         <StatsCard
+          title="Calendarios"
+          value={stats.totalCalendars}
+          description="Horarios de servicio"
+          icon={Calendar}
+          trend={{ value: 0, isPositive: true }}
+        />
+
+        <StatsCard
           title="Usuarios"
           value={stats.totalUsers}
           description="Usuarios registrados"
@@ -165,6 +256,20 @@ export default function Dashboard() {
           trend={{ value: -15.2, isPositive: true }}
         />
       </div>
+
+      {/* Map Overview */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <MapPin className="h-5 w-5" />
+            Vista General del Sistema
+          </CardTitle>
+          <CardDescription>Mapa interactivo con todas las paradas y rutas</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <InteractiveMap mode={{ type: "view-only" }} stops={stops} routes={routes} className="h-96" />
+        </CardContent>
+      </Card>
 
       {/* Recent Activity */}
       <div className="grid gap-6 md:grid-cols-2">
@@ -203,16 +308,50 @@ export default function Dashboard() {
           </CardContent>
         </Card>
 
-        {/* System Status */}
+        {/* Recent Trips */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <TrendingUp className="h-5 w-5" />
-              Estado del Sistema
+              <Clock className="h-5 w-5" />
+              Viajes Recientes
             </CardTitle>
-            <CardDescription>Indicadores clave de rendimiento</CardDescription>
+            <CardDescription>Últimos viajes programados en el sistema</CardDescription>
           </CardHeader>
           <CardContent>
+            <div className="space-y-3">
+              {recentTrips.length > 0 ? (
+                recentTrips.map((trip) => (
+                  <div key={trip.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-gray-900">
+                        {trip.routeName} - {trip.busPlate}
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        Inicio: {trip.startTime} | {trip.createdAt.toLocaleDateString("es-ES")}
+                      </p>
+                    </div>
+                    <Badge variant="outline">Programado</Badge>
+                  </div>
+                ))
+              ) : (
+                <p className="text-sm text-gray-500 text-center py-4">No hay viajes recientes</p>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* System Status */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <TrendingUp className="h-5 w-5" />
+            Estado del Sistema
+          </CardTitle>
+          <CardDescription>Indicadores clave de rendimiento</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-6 md:grid-cols-2">
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium">Cobertura de Paradas</span>
@@ -233,7 +372,9 @@ export default function Dashboard() {
                   <span className="text-sm text-gray-600">72%</span>
                 </div>
               </div>
+            </div>
 
+            <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium">Precisión de Horarios</span>
                 <div className="flex items-center gap-2">
@@ -254,9 +395,9 @@ export default function Dashboard() {
                 </div>
               </div>
             </div>
-          </CardContent>
-        </Card>
-      </div>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   )
 }

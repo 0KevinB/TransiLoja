@@ -46,7 +46,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               role: userData.role || "user",
               favoriteStops: userData.favoriteStops || [],
               favoriteRoutes: userData.favoriteRoutes || [],
-              preferences: userData.preferences || {},
               createdAt: userData.createdAt?.toDate() || new Date(),
               updatedAt: userData.updatedAt?.toDate() || new Date(),
             })

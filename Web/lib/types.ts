@@ -46,6 +46,9 @@ export interface Route {
 export interface Calendar {
   id: string
   name: string
+  routeId?: string // Nueva propiedad para asociar calendario con ruta específica
+  operatingStartTime: string // HH:MM - hora de inicio específica para esta ruta
+  operatingEndTime: string // HH:MM - hora de fin específica para esta ruta
   monday: boolean
   tuesday: boolean
   wednesday: boolean

@@ -145,26 +145,58 @@ export function InteractiveMap({
     // Add stop markers
     stops.forEach((stop) => {
       const isSelected = selectedStops.includes(stop.id)
+      const isBus = (stop as any).isBus // Detectar si es un bus
+
+      let iconUrl = "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png"
+      let iconSize: [number, number] = [25, 41]
+      let iconAnchor: [number, number] = [12, 41]
+
+      if (isBus) {
+        // Icono especial para buses
+        const busData = stop as any
+        if (busData.isAtStop) {
+          iconUrl =
+            "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-yellow.png"
+        } else if (busData.status === "in_transit") {
+          iconUrl =
+            "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png"
+        } else {
+          iconUrl = "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png"
+        }
+        iconSize = [30, 45]
+        iconAnchor = [15, 45]
+      } else if (isSelected) {
+        iconUrl = "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png"
+      }
 
       const marker = L.marker([stop.lat, stop.lng], {
         icon: L.icon({
-          iconUrl: isSelected
-            ? "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png"
-            : "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png",
+          iconUrl,
           shadowUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png",
-          iconSize: [25, 41],
-          iconAnchor: [12, 41],
+          iconSize,
+          iconAnchor,
           popupAnchor: [1, -34],
           shadowSize: [41, 41],
         }),
-      })
-        .addTo(mapInstanceRef.current)
-        .bindPopup(`<b>${stop.name}</b><br>Líneas: ${stop.lines?.length || 0}`)
+      }).addTo(mapInstanceRef.current)
+
+      // Popup diferente para buses
+      if (isBus) {
+        const busData = stop as any
+        marker.bindPopup(`
+        <b>${stop.name}</b><br>
+        <strong>Estado:</strong> ${busData.isAtStop ? "En parada" : busData.status}<br>
+        <strong>Velocidad:</strong> ${busData.speed} km/h<br>
+        <strong>Ruta:</strong> ${stop.lines?.[0] || "N/A"}
+      `)
+      } else {
+        marker.bindPopup(`<b>${stop.name}</b><br>Líneas: ${stop.lines?.length || 0}`)
+      }
 
       marker.on("click", () => {
-        if (mode.type === "create-route") {
+        if (mode.type === "create-route" && !isBus) {
           onRouteStopSelect?.(stop.id)
-        } else {
+        } else if (!isBus) {
           onStopSelect?.(stop)
         }
       })
