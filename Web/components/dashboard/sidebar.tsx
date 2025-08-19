@@ -20,6 +20,9 @@ import {
   LogOut,
   Menu,
   X,
+  Globe,
+  FileText,
+  DollarSign,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -28,11 +31,15 @@ const navigation = [
   { name: "Paradas", href: "/dashboard/stops", icon: MapPin },
   { name: "Rutas", href: "/dashboard/routes", icon: Route },
   { name: "Buses", href: "/dashboard/buses", icon: Bus },
+  { name: "Conductores", href: "/dashboard/drivers", icon: Users },
   { name: "Calendarios", href: "/dashboard/calendars", icon: Calendar },
   { name: "Viajes", href: "/dashboard/trips", icon: Clock },
   { name: "Buses en Vivo", href: "/dashboard/live-buses", icon: Radio },
   { name: "Alertas", href: "/dashboard/alerts", icon: AlertTriangle },
+  { name: "Tarifas", href: "/dashboard/fares", icon: DollarSign },
   { name: "Usuarios", href: "/dashboard/users", icon: Users },
+  { name: "Municipios", href: "/dashboard/municipalities", icon: Globe },
+  { name: "Reportes", href: "/dashboard/reports", icon: FileText },
 ]
 
 export function Sidebar() {

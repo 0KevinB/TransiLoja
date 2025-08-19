@@ -2,10 +2,10 @@
 
 import type React from "react"
 
-import { useEffect, useState } from "react"
-import { collection, getDocs, addDoc, deleteDoc, doc, updateDoc } from "firebase/firestore"
+import { useEffect, useState, useMemo, useCallback } from "react"
+import { collection, getDocs, addDoc, deleteDoc, doc, updateDoc, query, orderBy, limit, startAfter, where, DocumentSnapshot } from "firebase/firestore"
 import { db } from "@/lib/firebase"
-import type { Trip, Route, Bus, Calendar } from "@/lib/types"
+import type { Trip, Route, Bus, Calendar, Conductor } from "@/lib/types"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -25,25 +25,24 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Clock, Plus, Edit, Trash2, Search, BusIcon, RouteIcon, CalendarIcon } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 
-// Datos mock para conductores
-const mockDrivers = [
-  { id: "driver_1", name: "Carlos Mendoza", license: "EC-001234", experience: 8 },
-  { id: "driver_2", name: "María González", license: "EC-005678", experience: 5 },
-  { id: "driver_3", name: "Luis Rodríguez", license: "EC-009012", experience: 12 },
-  { id: "driver_4", name: "Ana Jiménez", license: "EC-003456", experience: 3 },
-  { id: "driver_5", name: "Pedro Vargas", license: "EC-007890", experience: 15 },
-  { id: "driver_6", name: "Carmen Silva", license: "EC-001122", experience: 7 },
-]
+const ITEMS_PER_PAGE = 20
 
 export default function TripsPage() {
   const [trips, setTrips] = useState<Trip[]>([])
   const [routes, setRoutes] = useState<Route[]>([])
   const [buses, setBuses] = useState<Bus[]>([])
   const [calendars, setCalendars] = useState<Calendar[]>([])
+  const [conductores, setConductores] = useState<Conductor[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadingTrips, setLoadingTrips] = useState(false)
   const [searchTerm, setSearchTerm] = useState("")
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingTrip, setEditingTrip] = useState<Trip | null>(null)
+  const [paginaActual, setPaginaActual] = useState(1)
+  const [ultimoDoc, setUltimoDoc] = useState<DocumentSnapshot | null>(null)
+  const [hayMasPaginas, setHayMasPaginas] = useState(true)
+  const [filtroRuta, setFiltroRuta] = useState<string>("todas")
+  const [filtroCalendario, setFiltroCalendario] = useState<string>("todos")
   const [formData, setFormData] = useState({
     routeId: "",
     busId: "",
@@ -57,33 +56,105 @@ export default function TripsPage() {
   })
   const { toast } = useToast()
 
-  useEffect(() => {
-    fetchData()
-  }, [])
-
-  const fetchData = async () => {
+  const cargarViajes = useCallback(async (pagina: number = 1, resetear: boolean = false) => {
     try {
-      const [tripsSnapshot, routesSnapshot, busesSnapshot, calendarsSnapshot] = await Promise.all([
-        getDocs(collection(db, "trips")),
-        getDocs(collection(db, "routes")),
-        getDocs(collection(db, "buses")),
-        getDocs(collection(db, "calendars")),
-      ])
+      setLoadingTrips(true)
+      
+      let q = query(
+        collection(db, "trips"),
+        orderBy("startTime", "asc")
+      )
 
-      // Fetch trips
-      const tripsData: Trip[] = []
-      tripsSnapshot.forEach((doc) => {
+      // Aplicar filtros
+      if (filtroRuta !== "todas") {
+        q = query(q, where("routeId", "==", filtroRuta))
+      }
+      
+      if (filtroCalendario !== "todos") {
+        q = query(q, where("calendarId", "==", filtroCalendario))
+      }
+
+      // Paginación
+      q = query(q, limit(ITEMS_PER_PAGE + 1))
+      
+      if (pagina > 1 && ultimoDoc && !resetear) {
+        q = query(q, startAfter(ultimoDoc))
+      }
+
+      const tripsSnapshot = await getDocs(q)
+      const docs = tripsSnapshot.docs
+      
+      const hayMas = docs.length > ITEMS_PER_PAGE
+      const tripsData = docs.slice(0, ITEMS_PER_PAGE).map(doc => {
         const data = doc.data()
-        tripsData.push({
+        return {
           id: doc.id,
           routeId: data.routeId,
           busId: data.busId,
           calendarId: data.calendarId,
+          conductorId: data.conductorId,
           headsign: data.headsign,
           direction: data.direction,
           startTime: data.startTime,
           endTime: data.endTime,
           frequency: data.frequency,
+          createdAt: data.createdAt?.toDate() || new Date(),
+          updatedAt: data.updatedAt?.toDate() || new Date(),
+        } as Trip
+      })
+      
+      if (resetear || pagina === 1) {
+        setTrips(tripsData)
+      } else {
+        setTrips(prev => [...prev, ...tripsData])
+      }
+      
+      setUltimoDoc(docs[Math.min(docs.length - 1, ITEMS_PER_PAGE - 1)])
+      setHayMasPaginas(hayMas)
+      setPaginaActual(pagina)
+      
+    } catch (error) {
+      console.error("Error cargando viajes:", error)
+      toast({
+        title: "Error",
+        description: "No se pudieron cargar los viajes",
+        variant: "destructive",
+      })
+    } finally {
+      setLoadingTrips(false)
+    }
+  }, [filtroRuta, filtroCalendario, ultimoDoc, toast])
+
+  const fetchData = async () => {
+    try {
+      const [routesSnapshot, busesSnapshot, calendarsSnapshot, conductoresSnapshot] = await Promise.all([
+        getDocs(collection(db, "routes")),
+        getDocs(collection(db, "buses")),
+        getDocs(collection(db, "calendars")),
+        getDocs(collection(db, "conductores")),
+      ])
+
+      // Cargar conductores
+      const conductoresData: Conductor[] = []
+      conductoresSnapshot.forEach((doc) => {
+        const data = doc.data()
+        conductoresData.push({
+          id_conductor: doc.id,
+          cedula: data.cedula,
+          nombre: data.nombre,
+          apellidos: data.apellidos,
+          fecha_nacimiento: data.fecha_nacimiento?.toDate() || new Date(),
+          telefono: data.telefono,
+          email: data.email,
+          direccion: data.direccion,
+          fecha_licencia: data.fecha_licencia?.toDate() || new Date(),
+          fecha_vencimiento_licencia: data.fecha_vencimiento_licencia?.toDate() || new Date(),
+          tipo_licencia: data.tipo_licencia,
+          estado: data.estado,
+          foto_url: data.foto_url,
+          experiencia_anos: data.experiencia_anos,
+          calificacion: data.calificacion,
+          observaciones: data.observaciones,
           createdAt: data.createdAt?.toDate() || new Date(),
           updatedAt: data.updatedAt?.toDate() || new Date(),
         })
@@ -120,6 +191,7 @@ export default function TripsPage() {
           capacity: data.capacity,
           status: data.status,
           routeId: data.routeId,
+          conductorId: data.conductorId,
           features: data.features,
           createdAt: data.createdAt?.toDate() || new Date(),
           updatedAt: data.updatedAt?.toDate() || new Date(),
@@ -146,10 +218,13 @@ export default function TripsPage() {
         })
       })
 
-      setTrips(tripsData.sort((a, b) => a.startTime.localeCompare(b.startTime)))
       setRoutes(routesData)
       setBuses(busesData)
       setCalendars(calendarsData)
+      setConductores(conductoresData.filter(c => c.estado === "activo"))
+      
+      // Cargar viajes con paginación después
+      await cargarViajes(1, true)
 
       // Crear calendarios por defecto si no existen
       if (calendarsData.length === 0) {
@@ -223,13 +298,62 @@ export default function TripsPage() {
     }
   }
 
+  useEffect(() => {
+    fetchData()
+  }, [])
+  
+  useEffect(() => {
+    if (routes.length > 0) {
+      cargarViajes(1, true)
+    }
+  }, [filtroRuta, filtroCalendario, cargarViajes, routes.length])
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    if (!formData.routeId || !formData.busId || !formData.calendarId || !formData.driverId) {
+    // Validaciones más específicas
+    if (!formData.routeId) {
       toast({
         title: "Error",
-        description: "Todos los campos son obligatorios",
+        description: "Debes seleccionar una ruta",
+        variant: "destructive",
+      })
+      return
+    }
+    
+    if (!formData.busId || formData.busId === "no-buses") {
+      toast({
+        title: "Error",
+        description: "Debes seleccionar un bus válido",
+        variant: "destructive",
+      })
+      return
+    }
+    
+    if (!formData.calendarId) {
+      toast({
+        title: "Error",
+        description: "Debes seleccionar un calendario",
+        variant: "destructive",
+      })
+      return
+    }
+    
+    if (!formData.driverId) {
+      toast({
+        title: "Error",
+        description: "Debes asignar un conductor",
+        variant: "destructive",
+      })
+      return
+    }
+    
+    // Validar que el bus esté disponible
+    const selectedBus = buses.find(bus => bus.id === formData.busId)
+    if (selectedBus && selectedBus.status !== "active") {
+      toast({
+        title: "Error",
+        description: "El bus seleccionado no está activo",
         variant: "destructive",
       })
       return
@@ -240,7 +364,7 @@ export default function TripsPage() {
         routeId: formData.routeId,
         busId: formData.busId,
         calendarId: formData.calendarId,
-        driverId: formData.driverId,
+        conductorId: formData.driverId,
         headsign: formData.headsign,
         direction: formData.direction,
         startTime: formData.startTime,
@@ -280,7 +404,7 @@ export default function TripsPage() {
         endTime: "22:00:00",
         frequency: 15,
       })
-      fetchData()
+      cargarViajes(1, true)
     } catch (error) {
       console.error("Error saving trip:", error)
       toast({
@@ -297,7 +421,7 @@ export default function TripsPage() {
       routeId: trip.routeId,
       busId: trip.busId,
       calendarId: trip.calendarId,
-      driverId: (trip as any).driverId || "",
+      driverId: (trip as any).conductorId || "",
       headsign: trip.headsign,
       direction: trip.direction,
       startTime: trip.startTime,
@@ -318,7 +442,7 @@ export default function TripsPage() {
         title: "Éxito",
         description: "Viaje eliminado correctamente",
       })
-      fetchData()
+      cargarViajes(1, true)
     } catch (error) {
       console.error("Error deleting trip:", error)
       toast({
@@ -336,7 +460,14 @@ export default function TripsPage() {
 
   const getBusInfo = (busId: string) => {
     const bus = buses.find((b) => b.id === busId)
-    return bus ? bus.plateNumber : "Bus desconocido"
+    if (!bus) return "Bus desconocido"
+    return {
+      plateNumber: bus.plateNumber,
+      model: bus.model,
+      capacity: bus.capacity,
+      features: bus.features,
+      status: bus.status
+    }
   }
 
   const getCalendarInfo = (calendarId: string) => {
@@ -344,29 +475,44 @@ export default function TripsPage() {
     return calendar ? calendar.name : "Calendario desconocido"
   }
 
-  const getDriverInfo = (driverId: string) => {
-    const driver = mockDrivers.find((d) => d.id === driverId)
-    return driver ? driver.name : "Conductor desconocido"
+  const getDriverInfo = (conductorId: string) => {
+    const conductor = conductores.find((c) => c.id_conductor === conductorId)
+    return conductor ? `${conductor.nombre} ${conductor.apellidos}` : "Conductor desconocido"
   }
 
   const getAvailableBuses = (routeId: string) => {
+    if (!routeId) return buses.filter((bus) => bus.status === "active")
     return buses.filter((bus) => bus.status === "active" && (!bus.routeId || bus.routeId === routeId))
   }
 
-  const filteredTrips = trips.filter((trip) => {
-    const route = routes.find((r) => r.id === trip.routeId)
-    const bus = buses.find((b) => b.id === trip.busId)
-    return (
-      route?.shortName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      bus?.plateNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      trip.headsign.toLowerCase().includes(searchTerm.toLowerCase())
-    )
-  })
+  const filteredTrips = useMemo(() => {
+    if (!searchTerm.trim()) return trips
+    
+    const searchLower = searchTerm.toLowerCase()
+    return trips.filter((trip) => {
+      const route = routes.find((r) => r.id === trip.routeId)
+      const bus = buses.find((b) => b.id === trip.busId)
+      const conductor = conductores.find((c) => c.id_conductor === (trip as any).conductorId)
+      
+      return (
+        route?.shortName.toLowerCase().includes(searchLower) ||
+        bus?.plateNumber.toLowerCase().includes(searchLower) ||
+        trip.headsign.toLowerCase().includes(searchLower) ||
+        conductor?.nombre.toLowerCase().includes(searchLower) ||
+        conductor?.apellidos.toLowerCase().includes(searchLower)
+      )
+    })
+  }, [trips, searchTerm, routes, buses, conductores])
 
   if (loading) {
     return (
       <div className="space-y-6">
         <div className="h-8 bg-gray-200 animate-pulse rounded" />
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          {[...Array(4)].map((_, i) => (
+            <div key={i} className="h-24 bg-gray-200 animate-pulse rounded" />
+          ))}
+        </div>
         <div className="h-64 bg-gray-200 animate-pulse rounded" />
       </div>
     )
@@ -427,11 +573,22 @@ export default function TripsPage() {
                       <SelectValue placeholder="Seleccionar bus" />
                     </SelectTrigger>
                     <SelectContent>
-                      {getAvailableBuses(formData.routeId).map((bus) => (
-                        <SelectItem key={bus.id} value={bus.id}>
-                          {bus.plateNumber} - {bus.model} ({bus.capacity} pasajeros)
+                      {getAvailableBuses(formData.routeId).length > 0 ? (
+                        getAvailableBuses(formData.routeId).map((bus) => (
+                          <SelectItem key={bus.id} value={bus.id}>
+                            <div className="flex flex-col">
+                              <span className="font-medium">{bus.plateNumber} - {bus.model}</span>
+                              <span className="text-xs text-gray-500">
+                                {bus.capacity} pax • {bus.year} • {bus.features.gps ? '📍' : ''}{bus.features.airConditioning ? '❄️' : ''}{bus.features.wifi ? '📶' : ''}
+                              </span>
+                            </div>
+                          </SelectItem>
+                        ))
+                      ) : (
+                        <SelectItem value="no-buses" disabled>
+                          {formData.routeId ? 'No hay buses disponibles para esta ruta' : 'Selecciona una ruta primero'}
                         </SelectItem>
-                      ))}
+                      )}
                     </SelectContent>
                   </Select>
                 </div>
@@ -448,9 +605,18 @@ export default function TripsPage() {
                       <SelectValue placeholder="Seleccionar conductor" />
                     </SelectTrigger>
                     <SelectContent>
-                      {mockDrivers.map((driver) => (
-                        <SelectItem key={driver.id} value={driver.id}>
-                          {driver.name} - {driver.license} ({driver.experience} años exp.)
+                      {conductores.filter(conductor => {
+                        // Mostrar solo conductores disponibles (sin bus asignado o asignados al bus seleccionado)
+                        const busWithConductor = buses.find(bus => bus.conductorId === conductor.id_conductor)
+                        return !busWithConductor || busWithConductor.id === formData.busId
+                      }).map((conductor) => (
+                        <SelectItem key={conductor.id_conductor} value={conductor.id_conductor}>
+                          <div className="flex flex-col">
+                            <span className="font-medium">{conductor.nombre} {conductor.apellidos}</span>
+                            <span className="text-xs text-gray-500">
+                              Licencia {conductor.tipo_licencia} • {conductor.experiencia_anos} años exp. • ⭐ {conductor.calificacion || 'N/A'}
+                            </span>
+                          </div>
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -619,85 +785,159 @@ export default function TripsPage() {
           <CardDescription>Gestiona los viajes y asignaciones de conductores</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="flex items-center space-x-2 mb-4">
-            <Search className="h-4 w-4 text-gray-400" />
-            <Input
-              placeholder="Buscar viajes..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="max-w-sm"
-            />
+          <div className="flex flex-col md:flex-row gap-4 mb-4">
+            <div className="flex items-center space-x-2 flex-1">
+              <Search className="h-4 w-4 text-gray-400" />
+              <Input
+                placeholder="Buscar viajes..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="max-w-sm"
+              />
+            </div>
+            <div className="flex gap-2">
+              <Select value={filtroRuta} onValueChange={setFiltroRuta}>
+                <SelectTrigger className="w-48">
+                  <SelectValue placeholder="Filtrar por ruta" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todas">Todas las rutas</SelectItem>
+                  {routes.map((route) => (
+                    <SelectItem key={route.id} value={route.id}>
+                      {route.shortName} - {route.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select value={filtroCalendario} onValueChange={setFiltroCalendario}>
+                <SelectTrigger className="w-48">
+                  <SelectValue placeholder="Filtrar por calendario" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todos los calendarios</SelectItem>
+                  {calendars.map((calendar) => (
+                    <SelectItem key={calendar.id} value={calendar.id}>
+                      {calendar.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
-          <div className="rounded-md border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Ruta</TableHead>
-                  <TableHead>Bus</TableHead>
-                  <TableHead>Conductor</TableHead>
-                  <TableHead>Destino</TableHead>
-                  <TableHead>Horario</TableHead>
-                  <TableHead>Frecuencia</TableHead>
-                  <TableHead>Calendario</TableHead>
-                  <TableHead className="text-right">Acciones</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredTrips.map((trip) => {
-                  const route = routes.find((r) => r.id === trip.routeId)
-                  return (
-                    <TableRow key={trip.id}>
-                      <TableCell>
-                        <Badge
-                          style={{
-                            backgroundColor: route?.color || "#3B82F6",
-                            color: route?.textColor || "#FFFFFF",
-                          }}
-                        >
-                          {getRouteInfo(trip.routeId)}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="font-medium">{getBusInfo(trip.busId)}</TableCell>
-                      <TableCell>{getDriverInfo((trip as any).driverId)}</TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-1">
-                          {trip.headsign}
-                          <Badge variant="outline" className="text-xs">
-                            {trip.direction === 0 ? "Ida" : "Vuelta"}
-                          </Badge>
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-sm">
-                        {trip.startTime.slice(0, 5)} - {trip.endTime.slice(0, 5)}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="secondary">{trip.frequency || 15} min</Badge>
-                      </TableCell>
-                      <TableCell className="text-sm">{getCalendarInfo(trip.calendarId)}</TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end space-x-2">
-                          <Button variant="outline" size="sm" onClick={() => handleEdit(trip)}>
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleDelete(trip.id)}
-                            className="text-red-600 hover:text-red-700"
+          {loadingTrips && trips.length === 0 ? (
+            <div className="space-y-4">
+              {[...Array(5)].map((_, i) => (
+                <div key={i} className="flex items-center space-x-4 p-4 border rounded">
+                  <div className="w-16 h-6 bg-gray-200 rounded animate-pulse"></div>
+                  <div className="w-20 h-6 bg-gray-200 rounded animate-pulse"></div>
+                  <div className="flex-1 space-y-2">
+                    <div className="h-4 bg-gray-200 rounded animate-pulse w-1/2"></div>
+                  </div>
+                  <div className="w-24 h-6 bg-gray-200 rounded animate-pulse"></div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-md border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Ruta</TableHead>
+                    <TableHead>Bus</TableHead>
+                    <TableHead>Conductor</TableHead>
+                    <TableHead>Destino</TableHead>
+                    <TableHead>Horario</TableHead>
+                    <TableHead>Frecuencia</TableHead>
+                    <TableHead>Calendario</TableHead>
+                    <TableHead className="text-right">Acciones</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredTrips.map((trip) => {
+                    const route = routes.find((r) => r.id === trip.routeId)
+                    return (
+                      <TableRow key={trip.id}>
+                        <TableCell>
+                          <Badge
+                            style={{
+                              backgroundColor: route?.color || "#3B82F6",
+                              color: route?.textColor || "#FFFFFF",
+                            }}
                           >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  )
-                })}
-              </TableBody>
-            </Table>
-          </div>
+                            {getRouteInfo(trip.routeId)}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="font-medium">
+                          <div className="flex flex-col">
+                            <span>{typeof getBusInfo(trip.busId) === 'string' ? getBusInfo(trip.busId) : getBusInfo(trip.busId).plateNumber}</span>
+                            {typeof getBusInfo(trip.busId) === 'object' && (
+                              <span className="text-xs text-gray-500">
+                                {getBusInfo(trip.busId).model} • {getBusInfo(trip.busId).capacity} pax
+                              </span>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell>{getDriverInfo((trip as any).conductorId)}</TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-1">
+                            {trip.headsign}
+                            <Badge variant="outline" className="text-xs">
+                              {trip.direction === 0 ? "Ida" : "Vuelta"}
+                            </Badge>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-sm">
+                          {trip.startTime.slice(0, 5)} - {trip.endTime.slice(0, 5)}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="secondary">{trip.frequency || 15} min</Badge>
+                        </TableCell>
+                        <TableCell className="text-sm">{getCalendarInfo(trip.calendarId)}</TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end space-x-2">
+                            <Button variant="outline" size="sm" onClick={() => handleEdit(trip)}>
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleDelete(trip.id)}
+                              className="text-red-600 hover:text-red-700"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    )
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+          
+          {/* Paginación */}
+          {filteredTrips.length > 0 && (
+            <div className="flex justify-between items-center mt-6 pt-4 border-t">
+              <div className="text-sm text-gray-500">
+                Mostrando {filteredTrips.length} viajes
+              </div>
+              <div className="flex gap-2">
+                {hayMasPaginas && (
+                  <Button 
+                    variant="outline" 
+                    onClick={() => cargarViajes(paginaActual + 1)} 
+                    disabled={loadingTrips}
+                  >
+                    {loadingTrips ? "Cargando..." : "Cargar más"}
+                  </Button>
+                )}
+              </div>
+            </div>
+          )}
 
-          {filteredTrips.length === 0 && (
+          {filteredTrips.length === 0 && !loadingTrips && (
             <div className="text-center py-8">
               <Clock className="mx-auto h-12 w-12 text-gray-400" />
               <h3 className="mt-2 text-sm font-medium text-gray-900">No hay viajes</h3>

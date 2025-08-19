@@ -7,7 +7,7 @@ import { StatsCard } from "@/components/dashboard/stats-card"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { InteractiveMap } from "@/components/map/interactive-map"
-import { MapPin, Route, Users, AlertTriangle, TrendingUp, Clock, Radio, Bus, Calendar } from "lucide-react"
+import { MapPin, Route, Users, AlertTriangle, TrendingUp, Clock, Radio, Bus, Calendar, Navigation, Globe } from "lucide-react"
 
 interface DashboardStats {
   totalStops: number
@@ -268,6 +268,59 @@ export default function Dashboard() {
         </CardHeader>
         <CardContent>
           <InteractiveMap mode={{ type: "view-only" }} stops={stops} routes={routes} className="h-96" />
+        </CardContent>
+      </Card>
+
+      {/* Quick Actions */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Navigation className="h-5 w-5" />
+            Acciones Rápidas
+          </CardTitle>
+          <CardDescription>Herramientas principales del sistema TransiLoja</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-4 md:grid-cols-3">
+            <a 
+              href="/dashboard/drivers"
+              className="flex items-center gap-3 p-4 border rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              <div className="p-2 bg-blue-100 rounded-lg">
+                <Users className="h-5 w-5 text-blue-600" />
+              </div>
+              <div>
+                <h3 className="font-medium">Gestión de Conductores</h3>
+                <p className="text-sm text-gray-500">Administrar conductores</p>
+              </div>
+            </a>
+            
+            <a 
+              href="/dashboard/municipalities"
+              className="flex items-center gap-3 p-4 border rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              <div className="p-2 bg-green-100 rounded-lg">
+                <Globe className="h-5 w-5 text-green-600" />
+              </div>
+              <div>
+                <h3 className="font-medium">Configurar Municipios</h3>
+                <p className="text-sm text-gray-500">Logos, colores, ubicación</p>
+              </div>
+            </a>
+            
+            <a 
+              href="/dashboard/live-buses"
+              className="flex items-center gap-3 p-4 border rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              <div className="p-2 bg-amber-100 rounded-lg">
+                <Radio className="h-5 w-5 text-amber-600" />
+              </div>
+              <div>
+                <h3 className="font-medium">Monitoreo en Vivo</h3>
+                <p className="text-sm text-gray-500">Ubicación de buses</p>
+              </div>
+            </a>
+          </div>
         </CardContent>
       </Card>
 
