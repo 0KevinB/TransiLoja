@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TransiLoja - Arquitectura de Datos y Flujo de Usuario</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            scroll-behavior: smooth;
+        }
+        .collection-card {
+            transition: all 0.3s ease;
+            border: 1px solid #e5e7eb;
+        }
+        .collection-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+        }
+        .flow-step {
+            position: relative;
+            padding-left: 2.5rem;
+            border-left: 2px solid #3b82f6;
+        }
+        .flow-step:before {
+            content: attr(data-step);
+            position: absolute;
+            left: -1.2rem;
+            top: 0;
+            width: 2.25rem;
+            height: 2.25rem;
+            border-radius: 9999px;
+            background-color: #3b82f6;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+        }
+        pre {
+            background-color: #1f2937;
+            color: #d1d5db;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            font-size: 0.875rem;
+            line-height: 1.25rem;
+            overflow-x: auto;
+        }
+        code {
+            font-family: 'Courier New', Courier, monospace;
+        }
+        th, td {
+            text-align: left;
+            padding: 0.75rem;
+            border-bottom: 1px solid #e5e7eb;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-800">
+
+    <header class="bg-white shadow-md sticky top-0 z-10">
+        <nav class="container mx-auto px-6 py-4 flex justify-between items-center">
+            <h1 class="text-2xl font-bold text-blue-600">TransiLoja</h1>
+            <div class="flex space-x-4">
+                <a href="#arquitectura" class="text-gray-600 hover:text-blue-600">Arquitectura</a>
+                <a href="#gtfs" class="text-gray-600 hover:text-blue-600">Integración GTFS</a>
+                <a href="#flujo" class="text-gray-600 hover:text-blue-600">Flujo de Usuario</a>
+            </div>
+        </nav>
+    </header>
+
+    <main class="container mx-auto px-6 py-12">
+
+        <!-- Sección de Arquitectura -->
+        <section id="arquitectura" class="mb-16">
+            <h2 class="text-4xl font-bold text-center mb-2">Arquitectura de Datos en Firestore</h2>
+            <p class="text-lg text-gray-600 text-center mb-12 max-w-3xl mx-auto">Visualización de las colecciones NoSQL inspiradas en el estándar GTFS. Cada tarjeta representa una colección y su documento de ejemplo.</p>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                
+                <div id="rutas" class="collection-card bg-white p-6 rounded-lg shadow"><h3 class="text-xl font-semibold text-blue-700 mb-2">rutas</h3><p class="text-sm text-gray-500 mb-4">Información estática de las líneas de autobús.</p><pre><code class="language-json">{
+  "id_ruta": "L2",
+  "nombre_largo": "Sauces Norte - Argeliac",
+  "nombre_corto": "Línea 2"
+}</code></pre></div>
+                <div id="paradas" class="collection-card bg-white p-6 rounded-lg shadow"><h3 class="text-xl font-semibold text-blue-700 mb-2">paradas</h3><p class="text-sm text-gray-500 mb-4">Ubicaciones físicas donde los buses se detienen.</p><pre><code class="language-json">{
+  "id_parada": "P015",
+  "nombre": "Parque Bolívar",
+  "es_punto_conexion": true,
+  "coordenadas": {
+    "lat": -3.9935,
+    "lng": -79.2043
+  }
+}</code></pre></div>
+                <div id="calendario" class="collection-card bg-white p-6 rounded-lg shadow"><h3 class="text-xl font-semibold text-blue-700 mb-2">calendario</h3><p class="text-sm text-gray-500 mb-4">Define los días de operación del servicio.</p><pre><code class="language-json">{
+  "id_calendario": "LABORABLES_2025",
+  "tipo_dia": "Lunes a Viernes"
+}</code></pre></div>
+                <div id="viajes" class="collection-card bg-white p-6 rounded-lg shadow"><h3 class="text-xl font-semibold text-orange-600 mb-2">viajes</h3><p class="text-sm text-gray-500 mb-4">Instancia de un recorrido para una ruta en un día específico.</p><pre><code class="language-json">{
+  "id_viaje": "L2_0700_LAB",
+  "id_ruta": "L2",
+  "id_calendario": "LABORABLES_2025",
+  "trazado_geografico": "[encoded_polyline]"
+}</code></pre></div>
+                <div id="tiempos_parada" class="collection-card bg-white p-6 rounded-lg shadow"><h3 class="text-xl font-semibold text-orange-600 mb-2">tiempos_parada</h3><p class="text-sm text-gray-500 mb-4">Horarios de llegada programados a cada parada para un viaje.</p><pre><code class="language-json">{
+  "id_viaje": "L2_0700_LAB",
+  "id_parada": "P015",
+  "tiempo_llegada": "07:15:00",
+  "secuencia": 5
+}</code></pre></div>
+                <div id="transbordos" class="collection-card bg-white p-6 rounded-lg shadow"><h3 class="text-xl font-semibold text-orange-600 mb-2">transbordos</h3><p class="text-sm text-gray-500 mb-4">Posibles caminatas entre paradas de conexión.</p><pre><code class="language-json">{
+  "id_parada_origen": "P015",
+  "id_parada_destino": "P022",
+  "tiempo_caminata_seg": 300
+}</code></pre></div>
+                <div id="buses_en_vivo" class="collection-card bg-white p-6 rounded-lg shadow border-2 border-green-500"><h3 class="text-xl font-semibold text-green-700 mb-2">buses_en_vivo (Simulada)</h3><p class="text-sm text-gray-500 mb-4">Posición en tiempo real de los autobuses (actualizada por Cloud Function).</p><pre><code class="language-json">{
+  "id_bus": "BUS_08",
+  "id_viaje_actual": "L2_0700_LAB",
+  "ultima_actualizacion": "timestamp",
+  "coordenadas_actuales": {
+    "lat": -3.9981,
+    "lng": -79.2015
+  }
+}</code></pre></div>
+                <div id="alertas" class="collection-card bg-white p-6 rounded-lg shadow border-2 border-red-500"><h3 class="text-xl font-semibold text-red-700 mb-2">alertas</h3><p class="text-sm text-gray-500 mb-4">Notificaciones sobre el estado del servicio.</p><pre><code class="language-json">{
+  "id_alerta": "ALERT_01",
+  "titulo": "Desvío en Av. Universitaria",
+  "descripcion": "Rutas L2 y L8 se desvían por...",
+  "rutas_afectadas": [
+    "L2",
+    "L8"
+  ],
+  "fecha_fin": "timestamp"
+}</code></pre></div>
+                <div id="usuarios" class="collection-card bg-white p-6 rounded-lg shadow border-2 border-purple-500"><h3 class="text-xl font-semibold text-purple-700 mb-2">usuarios / interacciones</h3><p class="text-sm text-gray-500 mb-4">Datos de usuario y registro de métricas de uso.</p><pre><code class="language-json">// Colección: usuarios
+{
+  "id_usuario": "uid_firebase_123",
+  "email": "usuario@test.com",
+  "favoritos": {
+    "paradas": ["P015"],
+    "rutas": ["L2"]
+  }
+}
+
+// Colección: interacciones_usuario
+{
+  "id_interaccion": "auto_id",
+  "id_usuario": "uid_firebase_123",
+  "tipo_evento": "planificar_viaje",
+  "fecha": "timestamp"
+}</code></pre></div>
+            </div>
+        </section>
+
+        <hr class="my-16 border-gray-300">
+        
+        <section id="gtfs" class="mb-16">
+            <h2 class="text-4xl font-bold text-center mb-2">Integración Profunda con GTFS</h2>
+            <p class="text-lg text-gray-600 text-center mb-12 max-w-3xl mx-auto">La arquitectura de Firestore es una traducción directa del estándar GTFS para garantizar la escalabilidad. A continuación, se detalla el propósito de cada fase.</p>
+            
+            <div class="space-y-8">
+                <div>
+                    <h3 class="text-2xl font-semibold mb-4 text-blue-800">GTFS Estático: El "Plano" del Transporte</h3>
+                    <p class="mb-4">Estos datos representan la estructura fija del sistema de transporte. Se cargan una sola vez desde archivos CSV mediante un script y constituyen la base sobre la cual opera toda la lógica de planificación.</p>
+                    <div class="bg-white rounded-lg shadow-lg overflow-hidden">
+                        <table class="w-full text-sm md:text-base">
+                            <thead class="bg-gray-100"><tr><th class="w-1/4">Colección Firestore</th><th class="w-1/4">Archivo GTFS</th><th>Propósito y Función en el Sistema</th></tr></thead>
+                            <tbody>
+                                <tr><td><strong>rutas</strong></td><td><code>routes.txt</code></td><td><strong>Identifica el "Qué":</strong> Define cada línea de autobús (L2, L8). Es el identificador de más alto nivel del servicio.</td></tr>
+                                <tr><td><strong>paradas</strong></td><td><code>stops.txt</code></td><td><strong>Define el "Dónde":</strong> Mapea todas las ubicaciones físicas donde el servicio es accesible (paradas y estaciones).</td></tr>
+                                <tr><td><strong>calendario</strong></td><td><code>calendar.txt</code></td><td><strong>Establece los "Días de Operación":</strong> Permite al sistema saber si un viaje está activo hoy (ej. laborables, fin de semana, feriado).</td></tr>
+                                <tr><td><strong>viajes</strong></td><td><code>trips.txt</code></td><td><strong>Describe el "Cómo":</strong> Conecta una ruta (el "Qué") con un trazado y un calendario específicos. Diferencia el bus de las 7 AM del de las 8 AM, aunque sean de la misma línea.</td></tr>
+                                <tr><td><strong>tiempos_parada</strong></td><td><code>stop_times.txt</code></td><td><strong>Determina el "Cuándo":</strong> Es el corazón del horario. Especifica la hora exacta en que un viaje concreto debe llegar a cada una de sus paradas. Es la base para el planificador.</td></tr>
+                                <tr><td><strong>transbordos</strong></td><td><code>transfers.txt</code></td><td><strong>Habilita las "Conexiones a Pie":</strong> Permite al planificador crear rutas inteligentes que incluyen caminar entre paradas cercanas, optimizando el tiempo total del viaje.</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div>
+                    <h3 class="text-2xl font-semibold mb-4 text-green-800">GTFS-Realtime: La Simulación en Vivo</h3>
+                    <p class="mb-4">Dado que no se dispone de un feed en tiempo real de la ciudad, el prototipo lo simula para demostrar las capacidades de una aplicación moderna y evaluar la experiencia de usuario.</p>
+                     <div class="bg-white rounded-lg shadow-lg overflow-hidden">
+                        <table class="w-full text-sm md:text-base">
+                            <thead class="bg-gray-100"><tr><th class="w-1/4">Función Realtime</th><th class="w-3/4">Mecanismo de Simulación y Propósito</th></tr></thead>
+                            <tbody>
+                                <tr><td><strong>Posiciones de Vehículos</strong></td><td>Mediante la colección <code>buses_en_vivo</code> y una Cloud Function. Su propósito es mostrar al usuario la ubicación real de los buses en el mapa, reduciendo la incertidumbre y mejorando la confianza en el servicio.</td></tr>
+                                <tr><td><strong>Alertas de Servicio</strong></td><td>Mediante la colección <code>alertas</code>. Permite comunicar al usuario eventos inesperados (desvíos, accidentes) que afectan su viaje, permitiéndole tomar decisiones informadas.</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <hr class="my-16 border-gray-300">
+
+        <section id="flujo">
+            <h2 class="text-4xl font-bold text-center mb-2">Flujo de Usuario: Planificación de Viaje</h2>
+            <p class="text-lg text-gray-600 text-center mb-12 max-w-3xl mx-auto">Ejemplo de cómo las colecciones interactúan para resolver la consulta de un usuario, desde el origen hasta el destino.</p>
+
+            <div class="space-y-12">
+                <div class="flow-step" data-step="1">
+                    <h3 class="text-2xl font-semibold mb-2">Inicio y Consulta del Usuario</h3>
+                    <p class="mb-4">El usuario abre la app y quiere ir desde su ubicación actual (Origen A) hasta la Universidad Nacional de Loja (Destino B).</p>
+                    <div class="grid md:grid-cols-2 gap-4">
+                        <div>
+                            <h4 class="font-semibold text-blue-600">Acciones del Usuario:</h4>
+                            <ul class="list-disc list-inside text-gray-700">
+                                <li>Selecciona origen y destino en el mapa.</li>
+                                <li>Pulsa "Planificar Viaje".</li>
+                            </ul>
+                        </div>
+                        <div>
+                            <h4 class="font-semibold text-purple-600">Registro de Interacción:</h4>
+                            <p class="text-sm">Se crea un nuevo documento en <strong>interacciones_usuario</strong>:</p>
+                            <pre class="mt-1"><code class="language-json">{
+  "tipo_evento": "planificar_viaje",
+  "id_usuario": "uid_firebase_123",
+  "fecha": "timestamp"
+}</code></pre>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flow-step" data-step="2">
+                    <h3 class="text-2xl font-semibold mb-2">Algoritmo RAPTOR: Búsqueda de Rutas</h3>
+                    <p class="mb-4">El backend (Cloud Function) ejecuta el algoritmo RAPTOR. Este busca las paradas más cercanas al Origen A y al Destino B.</p>
+                    <div>
+                        <h4 class="font-semibold text-blue-600">Consultas a Firestore:</h4>
+                        <ol class="list-decimal list-inside text-gray-700 space-y-2">
+                            <li><strong>Buscar paradas cercanas:</strong> Consulta a la colección <strong>paradas</strong> para encontrar P_Origen y P_Destino usando sus coordenadas.</li>
+                            <li><strong>Identificar viajes disponibles:</strong>
+                                <ul class="list-disc list-inside ml-6">
+                                    <li>Consulta <strong>tiempos_parada</strong> para encontrar qué <code>id_viaje</code> pasan por P_Origen.</li>
+                                    <li>Filtra esos viajes usando la colección <strong>calendario</strong> para asegurar que operan hoy.</li>
+                                </ul>
+                            </li>
+                             <li><strong>Construir itinerarios:</strong> Para cada viaje válido, sigue la secuencia en <strong>tiempos_parada</strong> para ver si alguna de sus paradas está cerca de P_Destino.</li>
+                            <li><strong>Considerar transbordos:</strong> El algoritmo consulta <strong>transbordos</strong> para evaluar si caminar entre paradas de diferentes rutas es una opción más rápida.</li>
+                        </ol>
+                    </div>
+                </div>
+                
+                <div class="flow-step" data-step="3">
+                    <h3 class="text-2xl font-semibold mb-2">Cálculo de ETA y Visualización</h3>
+                    <p class="mb-4">El sistema encontró una ruta óptima: caminar a la parada P010, tomar la Línea 2 y bajar en la P045.</p>
+                    <div class="grid md:grid-cols-2 gap-4">
+                        <div>
+                           <h4 class="font-semibold text-green-600">Cálculo del ETA (Tiempo Real):</h4>
+                            <ol class="list-decimal list-inside text-gray-700">
+                                <li>La app consulta <strong>buses_en_vivo</strong> para encontrar el bus más cercano de la Línea 2 (<code>id_viaje</code>) que se dirige a la parada P010.</li>
+                                <li>Calcula la diferencia entre la hora actual y el <code>tiempo_llegada</code> programado en <strong>tiempos_parada</strong>, ajustado por la posición real del bus.</li>
+                                <li>Muestra: "Línea 2 llega en 3-5 min".</li>
+                            </ol>
+                        </div>
+                        <div>
+                            <h4 class="font-semibold text-red-600">Verificación de Alertas:</h4>
+                            <p class="text-sm">Antes de mostrar la ruta, la app consulta <strong>alertas</strong> buscando documentos activos que afecten a la 'L2'. Si existe una, muestra la notificación de desvío en la interfaz.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flow-step" data-step="4">
+                    <h3 class="text-2xl font-semibold mb-2">Presentación de Resultados al Usuario</h3>
+                    <p>La interfaz muestra la ruta completa en el mapa:</p>
+                     <ul class="list-disc list-inside text-gray-700 space-y-1">
+                        <li>Línea de caminata hasta la parada <strong>P010</strong>.</li>
+                        <li>Trazado de la <strong>Ruta L2</strong> obtenido del campo <code>trazado_geografico</code> en el documento de <strong>viajes</strong>.</li>
+                        <li>Icono del bus en movimiento (de <strong>buses_en_vivo</strong>) a lo largo del trazado.</li>
+                        <li>Información detallada: "Toma la Línea 2 en 'Parque Infantil' y baja en 'UNL Portada'".</li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <footer class="bg-gray-800 text-white mt-16">
+        <div class="container mx-auto px-6 py-4 text-center">
+            <p>&copy; 2025 - Prototipo de Tesis TransiLoja. Un ejemplo conceptual para Trabajo de Integración Curricular.</p>
+        </div>
+    </footer>
+
+</body>
+</html>
